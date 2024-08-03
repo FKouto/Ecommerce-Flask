@@ -1,13 +1,26 @@
-# import
+# imports
 from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy # Database 
+from flask_sqlalchemy import SQLAlchemy # Database ORM (Object-Relational Mapping)
+from flask_cors import CORS #allow resources to be accessed from different host
+from flask_login import UserMixin, login_user, LoginManager, login_required, logout_user #Manager user authentication
 
-# instancia
+# Instances
 app = Flask(__name__)
+app.config['SECRET_KEY'] = "rupziC-wyqzi7-mezrep"
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db' #Config database
+login_manager = LoginManager() #Initializing the LoginManager for handling user sessions and authentication
 db = SQLAlchemy(app)
+login_manager.init_app(app) #Setting up the LoginManager with the Flask app
+login_manager.login_view = 'login' #Specifying the view to redirect to for login when required (Login Route Reference)
+CORS(app)
 
-# Creating a model of database
+# Database
+## User Model
+class User(db.Model, UserMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), nullable=False, unique=True)
+    password = db.Column(db.String(80), nullable=False)
+## Product Model
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
@@ -15,9 +28,32 @@ class Product(db.Model):
     description = db.Column(db.Text, nullable=True)
 
 # routes
+## Authentication
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+@app.route('/login', methods=["POST"])
+def login():
+    data = request.json
+    user = User.query.filter_by(username=data.get("username")).first()
+    if user and data.get("password") == user.password:
+            login_user(user)
+            return jsonify({"message": "Logged in successfully."})
+    return jsonify({"message": "Unauthorized. Invalid credentials."}), 401
+
+## Close Session
+@app.route('/logout', methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+    return jsonify({"message": "Logout successfully."})
+
+## Add Product (Protected Route)
 @app.route('/api/products/add', methods=["POST"])
+@login_required
 def add_product():
-    # STORAGE
+    # Storage
     data = request.json
     if "name" in data and "price" in data:
         product = Product(name=data["name"],price=data["price"],description=data.get("description", ""))
@@ -26,7 +62,9 @@ def add_product():
         return jsonify({"message": "Product added successfully."})
     return jsonify({"message": "Invalid product data."}), 500
 
+## Delete Product (Protected Route)
 @app.route('/api/products/delete/<int:product_id>', methods=["DELETE"])
+@login_required
 def delete_product(product_id):
     # Recovery Product of database
     product = Product.query.get(product_id)
@@ -36,7 +74,53 @@ def delete_product(product_id):
         return jsonify({"message": "Product deleted successfully."})
     return jsonify({"message": "Product not found."}), 404
 
-## root (Rota Raiz)
+## Get product by ID
+@app.route('/api/products/<int:product_id>', methods=["GET"])
+def get_product_details(product_id):
+    # Recovery Product of database
+    product = Product.query.get(product_id)
+    if product:
+        return jsonify({
+            "id": product.id,
+            "name": product.name,
+            "price": product.price,
+            "description": product.description
+        })
+    return jsonify({"message": "Product not found."}), 404
+
+## Update product by ID (Protected Route)
+@app.route('/api/products/update/<int:product_id>', methods=["PUT"])
+@login_required
+def update_product(product_id):
+    product = Product.query.get(product_id)
+    if not product:
+        return jsonify({"message": "Product not found."}), 404
+    data = request.json
+    # Updates data according to new parameters provided
+    if "name" in data:
+        product.name = data["name"]
+    if "price" in data:
+        product.price = data["price"]
+    if "description" in data:
+        product.description = data["description"]
+    db.session.commit()
+    return jsonify({"message": "Product update successfully."})
+
+## List all products
+@app.route('/api/products', methods=["GET"])
+def get_products():
+    products = Product.query.all()
+    product_list = []
+    for product in products:
+        product_data = {
+            "id": product.id,
+            "name": product.name,
+            "price": product.price,
+        }
+        product_list.append(product_data)
+    return jsonify(product_list)
+
+## Root Route
 @app.route('/')
 def hello_word():
     return 'Hello Word'
