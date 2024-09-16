@@ -1,4 +1,4 @@
-# E-commerce Flask App
+# E-commerce API Flask
 Este projeto é uma aplicação de e-commerce desenvolvida com Flask, fornecida como parte do Mini Curso de Python oferecido pela Rockeseat. O objetivo do projeto é criar um backend básico para uma loja online, com funcionalidades para gerenciamento de produtos e carrinho de compras, bem como autenticação de usuários.
 
 ## Funcionalidades
